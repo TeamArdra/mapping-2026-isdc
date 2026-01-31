@@ -1,3 +1,40 @@
+# ==============================================================================
+#                                  USER GUIDE
+# ==============================================================================
+#
+# --- STEP 1: TERMINAL SETUP COMMANDS ---
+# Open your terminal and run these 4 commands before starting:
+#
+# 1. Update System:
+#    sudo apt update
+#
+# 2. Install Camera & Python Tools:
+#    sudo apt install python3-pip libcamera-apps -y
+#
+# 3. Install Required Libraries:
+#    pip3 install pyserial piexif pynmea2 --break-system-packages
+#
+# 4. Enable Serial Port (CRITICAL):
+#    sudo raspi-config
+#    [Interface Options] -> [Serial Port] -> [Login Shell: NO] -> [Hardware: YES]
+#    (Then Reboot)
+#
+#
+# --- STEP 2: WHAT YOU NEED TO CHANGE IN THIS CODE ---
+#
+# 1. SERIAL_PORT (Line 60):
+#    - If using USB cable: Change to '/dev/ttyUSB0' or '/dev/ttyACM0'
+#    - If using GPIO Pins: Change to '/dev/serial0'
+#
+# 2. SHUTTER_SPEED (Line 73):
+#    - Sunny Day: Keep at 1000
+#    - Cloudy/Evening: Change to 4000 or 5000 (prevents dark photos)
+#
+# 3. OUTPUT_FOLDER (Line 69):
+#    - Change this if you want to save to a USB drive (e.g. /media/pi/USB/data)
+#
+# ==============================================================================
+
 import serial
 import pynmea2
 import time
@@ -8,18 +45,24 @@ import threading
 from datetime import datetime
 from fractions import Fraction
 
-# ================= CONFIGURATION =================
-# GPS SETTINGS
-SERIAL_PORT = '/dev/ttyUSB0' # CHECK THIS: likely /dev/ttyUSB0 or /dev/serial0
-BAUD_RATE = 115200           # Foxeer M10Q usually defaults to 115200
+# ================= CONFIGURATION SECTION =================
+
+# --- 1. GPS CONNECTION ---
+# CHECK THIS! If plugged via USB, it's usually /dev/ttyUSB0 or /dev/ttyACM0
+# If wired to pins 8 & 10, it's /dev/serial0
+SERIAL_PORT = '/dev/ttyUSB0' 
+BAUD_RATE = 115200           # Foxeer M10Q default
 GPS_TIMEOUT = 1
 
-# CAMERA SETTINGS
-OUTPUT_FOLDER = "/home/pi/mission_data"
-INTERVAL = 2.0               # Seconds between photos
-SHUTTER_SPEED = 1000         # Microseconds (1000 = 1/1000th sec to reduce blur)
+# --- 2. STORAGE SETTINGS ---
+# Folder where images will be saved
+OUTPUT_FOLDER = "/home/pi/Downloads/mission_data" 
 
-# GLOBAL VARIABLES (Shared between threads)
+# --- 3. CAMERA TUNING (RPi Camera V3) ---
+INTERVAL = 2.0               # Seconds between photos
+SHUTTER_SPEED = 1000         # Microseconds (1000 = 1/1000th sec). Increase if image is dark.
+
+# GLOBAL VARIABLES (Do not touch)
 current_lat = 0.0
 current_lon = 0.0
 current_alt = 0.0
@@ -80,11 +123,8 @@ def read_gps_loop():
                 try:
                     line = ser.readline().decode('utf-8', errors='ignore')
                     
-                    # We look for $GNGGA (Global Navigation GNSS System Fix Data)
-                    # This contains Lat, Lon, and Altitude
                     if line.startswith('$GNGGA') or line.startswith('$GPGGA'):
                         msg = pynmea2.parse(line)
-                        
                         if msg.latitude != 0.0:
                             current_lat = msg.latitude
                             current_lon = msg.longitude
@@ -92,7 +132,6 @@ def read_gps_loop():
                             gps_lock = True
                         else:
                             gps_lock = False
-                            
                 except pynmea2.ParseError:
                     continue
                 except Exception as e:
@@ -109,14 +148,14 @@ def main():
     
     # 1. Start GPS Thread
     gps_thread = threading.Thread(target=read_gps_loop)
-    gps_thread.daemon = True # Kills thread when main program exits
+    gps_thread.daemon = True 
     gps_thread.start()
     
     print("Waiting for GPS Lock...")
-    # Optional: Wait for lock before starting. Remove loop if you want to force start.
+    # NOTE: To test indoors without GPS, comment out the 'while' loop below
     while not gps_lock:
         time.sleep(1)
-        print("Scanning satellites...")
+        print(f"Scanning satellites... (Make sure you are outdoors)")
     
     print("GPS LOCKED. Starting Camera Mission.")
     
@@ -126,29 +165,26 @@ def main():
         while True:
             start_time = time.time()
             
-            # 2. Capture Photo using Libcamera
-            # We use rpicam-still (formerly libcamera-still)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{OUTPUT_FOLDER}/img_{timestamp}_{count}.jpg"
             
-            # -t 1: minimal timeout
-            # --nopreview: save CPU
-            # --shutter: fixed shutter speed prevents motion blur on drones
+            # 2. Camera Command for RPi Camera V3 (12MP)
+            # If you change cameras, update --width and --height below!
             cmd = [
                 "rpicam-still",
                 "-o", filename,
-                "-t", "100", 
+                "-t", "100",           # Minimal timeout
                 "--nopreview",
                 "--shutter", str(SHUTTER_SPEED),
-                "--width", "4608", # Set to your camera max resolution
-                "--height", "2592"
+                "--width", "4608",     # V3 Max Width
+                "--height", "2592",    # V3 Max Height
+                "--autofocus-mode", "manual", # CRITICAL: Disable autofocus
+                "--lens-position", "1.0"      # CRITICAL: Lock focus to Infinity
             ]
             
-            # Execute camera command
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             # 3. Stitch GPS Data
-            # We grab the variables RIGHT NOW to minimize sync error
             lat_snap = current_lat
             lon_snap = current_lon
             alt_snap = current_alt
@@ -160,13 +196,5 @@ def main():
             else:
                 print("Error: Camera failed to save image.")
             
-            # 4. Wait for next interval
             elapsed = time.time() - start_time
-            sleep_time = max(0, INTERVAL - elapsed)
-            time.sleep(sleep_time)
-
-    except KeyboardInterrupt:
-        print("\nMission Stopped.")
-
-if __name__ == "__main__":
-    main()
+            sleep
