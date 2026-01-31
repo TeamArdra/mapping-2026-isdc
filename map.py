@@ -102,7 +102,7 @@ def main():
 
     # 2. Setup Camera Module 3
     picam2 = Picamera2()
-    config = picam2.create_still_configuration(main_size=(WIDTH, HEIGHT))
+    config = picam2.create_still_configuration(main={"size": (WIDTH, HEIGHT)})
     picam2.configure(config)
     picam2.start()
     print("Camera: RPi Module 3 Online")
