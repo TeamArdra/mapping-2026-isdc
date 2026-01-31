@@ -197,4 +197,11 @@ def main():
                 print("Error: Camera failed to save image.")
             
             elapsed = time.time() - start_time
-            sleep
+            sleep_time = max(0, INTERVAL - elapsed)
+            time.sleep(sleep_time)
+
+    except KeyboardInterrupt:
+        print("\nMission Stopped.")
+
+if __name__ == "__main__":
+    main()
