@@ -6,7 +6,7 @@ import os
 
 # --- CONFIGURATION ---
 SERIAL_PORT = 'COM6'  # Matches your telemetry connection
-BAUD_RATE = 57600     # Matches the RPi telemetry baud rate
+BAUD_RATE = 115200   # Matches the RPi telemetry baud rate
 FILENAME = 'ardra_telemetry_log.csv'
 
 def start_gcs():
